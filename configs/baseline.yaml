@@ -2,7 +2,7 @@
 # optimizer
 lr: 0.001
 # dataset
-data_dir: processed_data
+data_dir: processed_data_noise
   # the path with the directory with XXX.pkl
 # Training Prarmeters:
 diffnet: TransformerConcatLinear #TransformerConcatLinear
