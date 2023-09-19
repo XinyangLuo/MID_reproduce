@@ -43,7 +43,7 @@ def main():
     steps = 5
 
     if config["eval_mode"]:
-        agent.eval(sampling, 100//step)
+        agent.eval(sampling, 100//steps)
     else:
         agent.train()
 
