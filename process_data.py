@@ -98,7 +98,8 @@ maybe_makedirs(data_folder_name)
 data_columns = pd.MultiIndex.from_product([['position', 'velocity', 'acceleration'], ['x', 'y']])
 
 # Process ETH-UCY
-for desired_source in ['eth', 'hotel', 'univ', 'zara1', 'zara2']:
+# for desired_source in ['eth', 'hotel', 'univ', 'zara1', 'zara2']:
+for desired_source in ['womd']:
     for data_class in ['train', 'val', 'test']:
         env = Environment(node_type_list=['PEDESTRIAN'], standardization=standardization)
         attention_radius = dict()
