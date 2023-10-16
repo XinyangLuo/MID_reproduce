@@ -72,8 +72,8 @@ def get_traj_hypers():
              'acceleration': ['x', 'y']
             }
         },
-    'pred_state': {'PEDESTRIAN': {'velocity': ['x', 'y']},
-                   'VEHICLE': {'velocity': ['x', 'y']}},
+    'pred_state': {'PEDESTRIAN': {'position': ['x', 'y']},
+                   'VEHICLE': {'position': ['x', 'y']}},
     'log_histograms': False,
     'dynamic_edges': 'yes',
     'edge_state_combine_method': 'sum',
