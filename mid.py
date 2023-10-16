@@ -117,7 +117,7 @@ class MID():
 
         self.log.info(f"Sampling: {sampling} Stride: {step}")
 
-        node_type = "PEDESTRIAN"
+        node_type = "VEHICLE"
         eval_ade_batch_errors = []
         eval_fde_batch_errors = []
         ph = self.hyperparams['prediction_horizon']
