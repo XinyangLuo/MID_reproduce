@@ -65,7 +65,7 @@ class DiffusionTraj(Module):
         self.var_sched = var_sched
 
     def get_loss(self, x_0, context, t=None):
-
+        
         batch_size, _, point_dim = x_0.size()
         if t == None:
             t = self.var_sched.uniform_sample_t(batch_size)
@@ -109,7 +109,14 @@ class DiffusionTraj(Module):
                 beta = self.var_sched.betas[[t]*batch_size]
                 e_theta = self.net(x_t, beta=beta, context=context)
                 if sampling == "ddpm":
-                    x_next = c0 * (x_t - c1 * e_theta) + sigma * z
+                    dt = 0.5
+                    x_t.requires_grad_()
+                    v_bar = (x_t[:, 1:, 0:2] - x_t[:, :-1, 0:2])/dt
+                    v = (x_t[:, 1:, 2:4] + x_t[:, :-1, 2:4])/2
+                    J = F.mse_loss(v_bar, v)
+                    grad = torch.autograd.grad(J, x_t)[0]
+                    x_t.detach()
+                    x_next = c0 * (x_t - c1 * e_theta) + sigma * z - grad*1.0
                 elif sampling == "ddim":
                     x0_t = (x_t - e_theta * (1 - alpha_bar).sqrt()) / alpha_bar.sqrt()
                     x_next = alpha_bar_next.sqrt() * x0_t + (1 - alpha_bar_next).sqrt() * e_theta
@@ -175,12 +182,12 @@ class TransformerConcatLinear(Module):
         super().__init__()
         self.residual = residual
         self.pos_emb = PositionalEncoding(d_model=2*context_dim, dropout=0.1, max_len=24)
-        self.concat1 = ConcatSquashLinear(2,2*context_dim,context_dim+3)
+        self.concat1 = ConcatSquashLinear(6,2*context_dim,context_dim+3)
         self.layer = nn.TransformerEncoderLayer(d_model=2*context_dim, nhead=4, dim_feedforward=4*context_dim)
         self.transformer_encoder = nn.TransformerEncoder(self.layer, num_layers=tf_layer)
         self.concat3 = ConcatSquashLinear(2*context_dim,context_dim,context_dim+3)
         self.concat4 = ConcatSquashLinear(context_dim,context_dim//2,context_dim+3)
-        self.linear = ConcatSquashLinear(context_dim//2, 2, context_dim+3)
+        self.linear = ConcatSquashLinear(context_dim//2, point_dim, context_dim+3)
         #self.linear = nn.Linear(128,2)
 
 

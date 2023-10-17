@@ -97,10 +97,11 @@ def get_node_timestep_data(env, scene, t, node, state, pred_state,
     rel_state = np.zeros_like(x[0])
     rel_state[0:2] = np.array(x)[-1, 0:2]
     x_st = env.standardize(x, state[node.type], node.type, mean=rel_state, std=std)
-    if list(pred_state[node.type].keys())[0] == 'position':  # If we predict position we do it relative to current pos
-        y_st = env.standardize(y, pred_state[node.type], node.type, mean=rel_state[0:2])
-    else:
-        y_st = env.standardize(y, pred_state[node.type], node.type)
+    # if list(pred_state[node.type].keys())[0] == 'position':  # If we predict position we do it relative to current pos
+    #     y_st = env.standardize(y, pred_state[node.type], node.type, mean=rel_state[0:2])
+    # else:
+    #     y_st = env.standardize(y, pred_state[node.type], node.type)
+    y_st = env.standardize(y, state[node.type], node.type, mean=rel_state, std=std)
 
     x_t = torch.tensor(x, dtype=torch.float)
     y_t = torch.tensor(y, dtype=torch.float)

@@ -16,7 +16,7 @@ class AutoEncoder(Module):
         self.diffnet = getattr(diffusion, config.diffnet)
 
         self.diffusion = DiffusionTraj(
-            net = self.diffnet(point_dim=2, context_dim=config.encoder_dim, tf_layer=config.tf_layer, residual=False),
+            net = self.diffnet(point_dim=6, context_dim=config.encoder_dim, tf_layer=config.tf_layer, residual=False),
             var_sched = VarianceSchedule(
                 num_steps=100,
                 beta_T=5e-2,
@@ -33,8 +33,8 @@ class AutoEncoder(Module):
         #print(f"Using {sampling}")
         dynamics = self.encoder.node_models_dict[node_type].dynamic
         encoded_x = self.encoder.get_latent(batch, node_type)
-        predicted_y_vel =  self.diffusion.sample(num_points, encoded_x,sample,bestof, flexibility=flexibility, ret_traj=ret_traj, sampling=sampling, step=step)
-        predicted_y_pos = dynamics.integrate_samples(predicted_y_vel)
+        predicted_y =  self.diffusion.sample(num_points, encoded_x,sample,bestof, point_dim=6, flexibility=flexibility, ret_traj=ret_traj, sampling=sampling, step=step)
+        predicted_y_pos = dynamics.integrate_samples(predicted_y, state='vel')
         return predicted_y_pos.cpu().detach().numpy()
 
     def get_loss(self, batch, node_type):

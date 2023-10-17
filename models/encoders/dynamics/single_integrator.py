@@ -229,7 +229,7 @@ class SingleIntegrator(Dynamic):
         self.F[0:2, 2:] = torch.eye(2, device=self.device, dtype=torch.float32) * self.dt
         self.F_t = self.F.transpose(-2, -1)
 
-    def integrate_samples(self, v, x=None):
+    def integrate_samples(self, v, x=None, state='vel'):
         """
         Integrates deterministic samples of velocity.
 
@@ -258,8 +258,11 @@ class SingleIntegrator(Dynamic):
         # return v
         #pdb.set_trace()
         #print(p_0)
-        #return torch.cumsum(v, dim=2) * self.dt + p_0
-        return v + p_0
+        if state == 'vel':
+            v = v[...,2:4]
+            return torch.cumsum(v, dim=2) * self.dt + p_0
+        else:
+            return v[...,0:2] + p_0
 
     def integrate_distribution(self, v_dist, x=None):
         r"""
