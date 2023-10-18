@@ -18,6 +18,10 @@ from models.autoencoder import AutoEncoder
 from models.trajectron import Trajectron
 from utils.model_registrar import ModelRegistrar
 from utils.trajectron_hypers import get_traj_hypers
+from evaluation.visualization import visualize_prediction
+import matplotlib
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
 import evaluation
 
 class MID():
@@ -117,7 +121,7 @@ class MID():
 
         self.log.info(f"Sampling: {sampling} Stride: {step}")
 
-        node_type = "PEDESTRIAN"
+        node_type = "VEHICLE"
         eval_ade_batch_errors = []
         eval_fde_batch_errors = []
         ph = self.hyperparams['prediction_horizon']
@@ -145,9 +149,12 @@ class MID():
                     if ts not in predictions_dict.keys():
                         predictions_dict[ts] = dict()
                     predictions_dict[ts][nodes[i]] = np.transpose(predictions[:, [i]], (1, 0, 2, 3))
-
-
-
+                
+                predictions_timesteps = list(predictions_dict.keys())
+                fig = plt.figure(figsize=(8, 8))
+                visualize_prediction(fig.add_subplot(111), {predictions_timesteps[0]: predictions_dict[predictions_timesteps[0]]}, scene.dt, max_hl=max_hl, ph=ph)
+                plt.show()
+                return
                 batch_error_dict = evaluation.compute_batch_statistics(predictions_dict,
                                                                        scene.dt,
                                                                        max_hl=max_hl,
@@ -157,7 +164,6 @@ class MID():
                                                                        map=None,
                                                                        best_of=True,
                                                                        prune_ph_to_future=True)
-
                 eval_ade_batch_errors = np.hstack((eval_ade_batch_errors, batch_error_dict[node_type]['ade']))
                 eval_fde_batch_errors = np.hstack((eval_fde_batch_errors, batch_error_dict[node_type]['fde']))
 

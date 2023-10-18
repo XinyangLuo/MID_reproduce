@@ -1,4 +1,4 @@
-from utils import prediction_output_to_trajectories
+from ..trajectory_utils import prediction_output_to_trajectories
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
 import numpy as np
@@ -19,7 +19,9 @@ def plot_trajectories(ax,
 
     cmap = ['k', 'b', 'y', 'g', 'r']
 
-    for node in histories_dict:
+    node_cmap = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+
+    for i, node in enumerate(histories_dict):
         history = histories_dict[node]
         future = futures_dict[node]
         predictions = prediction_dict[node]
@@ -38,8 +40,11 @@ def plot_trajectories(ax,
                                 ax=ax, shade=True, shade_lowest=False,
                                 color=np.random.choice(cmap), alpha=0.8)
 
+            # ax.plot(predictions[batch_num, sample_num, :, 0], predictions[batch_num, sample_num, :, 1],
+            #         color=cmap[node.type.value],
+            #         linewidth=line_width, alpha=line_alpha)
             ax.plot(predictions[batch_num, sample_num, :, 0], predictions[batch_num, sample_num, :, 1],
-                    color=cmap[node.type.value],
+                    color=node_cmap[i%10],
                     linewidth=line_width, alpha=line_alpha)
 
             ax.plot(future[:, 0],
