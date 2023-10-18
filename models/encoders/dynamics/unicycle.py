@@ -76,7 +76,7 @@ class Unicycle(Dynamic):
             x = self.dynamic(x, u[..., t])
             mus_list.append(torch.stack((x[0], x[1]), dim=-1))
 
-        pos_mus = torch.stack(mus_list, dim=2)
+        pos_mus = torch.stack(mus_list, dim=-2)
         return pos_mus
 
     def compute_control_jacobian(self, sample_batch_dim, components, x, u):

@@ -78,12 +78,11 @@ class DiffusionTraj(Module):
 
         e_rand = torch.randn_like(x_0).cuda()  # (B, N, d)
 
-
         e_theta = self.net(c0 * x_0 + c1 * e_rand, beta=beta, context=context)
         loss = F.mse_loss(e_theta.view(-1, point_dim), e_rand.view(-1, point_dim), reduction='mean')
         return loss
 
-    def sample(self, num_points, context, sample, bestof, point_dim=2, flexibility=0.0, ret_traj=False, sampling="ddpm", step=100):
+    def sample(self, num_points, context, sample, bestof, point_dim=2, flexibility=0.0, ret_traj=False, sampling="ddpm", step=100, guidance=False, dynamics=None):
         traj_list = []
         for i in range(sample):
             batch_size = context.size(0)
@@ -109,7 +108,17 @@ class DiffusionTraj(Module):
                 beta = self.var_sched.betas[[t]*batch_size]
                 e_theta = self.net(x_t, beta=beta, context=context)
                 if sampling == "ddpm":
-                    x_next = c0 * (x_t - c1 * e_theta) + sigma * z
+                    if not guidance:
+                        x_next = c0 * (x_t - c1 * e_theta) + sigma * z
+                    else :
+                        x_t.requires_grad_()
+                        pos = dynamics.integrate_samples(x_t)
+                        target = torch.tensor([0.0, 10.0]).repeat(x_t.shape[0], 1).cuda()
+                        J = -torch.norm(pos[:, -1, :] - target, 1, dim = 1).sum()
+                        grad = torch.autograd.grad(J, x_t)[0]
+                        x_t.detach()
+                        x_next = c0 * (x_t - c1 * e_theta) + sigma * z + grad*0.1
+
                 elif sampling == "ddim":
                     x0_t = (x_t - e_theta * (1 - alpha_bar).sqrt()) / alpha_bar.sqrt()
                     x_next = alpha_bar_next.sqrt() * x0_t + (1 - alpha_bar_next).sqrt() * e_theta
@@ -175,12 +184,12 @@ class TransformerConcatLinear(Module):
         super().__init__()
         self.residual = residual
         self.pos_emb = PositionalEncoding(d_model=2*context_dim, dropout=0.1, max_len=24)
-        self.concat1 = ConcatSquashLinear(2,2*context_dim,context_dim+3)
+        self.concat1 = ConcatSquashLinear(2,2*context_dim,context_dim+3) # dim_in = |pred_state|
         self.layer = nn.TransformerEncoderLayer(d_model=2*context_dim, nhead=4, dim_feedforward=4*context_dim)
         self.transformer_encoder = nn.TransformerEncoder(self.layer, num_layers=tf_layer)
         self.concat3 = ConcatSquashLinear(2*context_dim,context_dim,context_dim+3)
         self.concat4 = ConcatSquashLinear(context_dim,context_dim//2,context_dim+3)
-        self.linear = ConcatSquashLinear(context_dim//2, 2, context_dim+3)
+        self.linear = ConcatSquashLinear(context_dim//2, 2, context_dim+3) # dim_out = |pred_state|
         #self.linear = nn.Linear(128,2)
 
 

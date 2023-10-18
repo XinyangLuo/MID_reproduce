@@ -258,7 +258,7 @@ class SingleIntegrator(Dynamic):
         # return v
         #pdb.set_trace()
         #print(p_0)
-        return torch.cumsum(v, dim=2) * self.dt + p_0
+        return torch.cumsum(v, dim=-2) * self.dt + p_0
 
     def integrate_distribution(self, v_dist, x=None):
         r"""
