@@ -12,6 +12,7 @@ class Scene(object):
         self.name = name
 
         self.nodes = []
+        self.ego_node = None
 
         self.robot = None
 
