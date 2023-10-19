@@ -18,10 +18,7 @@ from models.autoencoder import AutoEncoder
 from models.trajectron import Trajectron
 from utils.model_registrar import ModelRegistrar
 from utils.trajectron_hypers import get_traj_hypers
-from evaluation.visualization import visualize_prediction
-import matplotlib
-matplotlib.use('TkAgg')
-import matplotlib.pyplot as plt
+from visualize_result import visualize_timestep_prediction, visualize_timesteps_prediction, visualize_timestep_prediction_map
 import evaluation
 
 class MID():
@@ -141,6 +138,8 @@ class MID():
                 test_batch = batch[0]
                 nodes = batch[1]
                 timesteps_o = batch[2]
+                ego_trajectory = batch[3]
+                ego_timesteps = batch[4]
                 traj_pred = self.model.generate(test_batch, node_type, num_points=12, sample=20,bestof=True, sampling=sampling, step=step) # B * 20 * 12 * 2
 
                 predictions = traj_pred
@@ -151,9 +150,9 @@ class MID():
                     predictions_dict[ts][nodes[i]] = np.transpose(predictions[:, [i]], (1, 0, 2, 3))
                 
                 predictions_timesteps = list(predictions_dict.keys())
-                fig = plt.figure(figsize=(8, 8))
-                visualize_prediction(fig.add_subplot(111), {predictions_timesteps[0]: predictions_dict[predictions_timesteps[0]]}, scene.dt, max_hl=max_hl, ph=ph)
-                plt.show()
+                # visualize_timesteps_prediction(predictions_dict,ego_trajectory, ego_timesteps, scene.dt, max_hl, ph)
+                # visualize_timestep_prediction(predictions_timesteps[0], predictions_dict[predictions_timesteps[0]], ego_trajectory, ego_timesteps, scene.dt, max_hl, ph)
+                visualize_timestep_prediction_map(predictions_timesteps[0], predictions_dict[predictions_timesteps[0]], ego_trajectory, ego_timesteps, scene.dt, max_hl, ph, 'singapore-onenorth', (200, 900, 300, 950))
                 return
                 batch_error_dict = evaluation.compute_batch_statistics(predictions_dict,
                                                                        scene.dt,

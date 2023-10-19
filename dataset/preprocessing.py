@@ -230,4 +230,10 @@ def get_timesteps_data(env, scene, t, node_type, state, pred_state,
                                                     scene_graph=scene_graph))
     if len(out_timesteps) == 0:
         return None
-    return collate(batch), nodes, out_timesteps
+    
+    # ego node
+    ego_timesteps = np.array([min(out_timesteps) - max_ht, max(out_timesteps) + max_ft])
+    ego_trajectory = scene.ego_node.get(ego_timesteps, hyperparams['ego_state'])
+    ego_trajectory = torch.tensor(ego_trajectory, dtype=torch.float)
+
+    return collate(batch), nodes, out_timesteps, ego_trajectory, ego_timesteps
