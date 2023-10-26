@@ -73,7 +73,7 @@ def get_traj_hypers():
             }
         },
     'pred_state': {'PEDESTRIAN': {'velocity': ['x', 'y']}, 'VEHICLE': {'velocity': ['x', 'y']}},
-    'ego_state': {'position': ['x', 'y']},
+    'guidance': True,
     'log_histograms': False,
     'dynamic_edges': 'yes',
     'edge_state_combine_method': 'sum',

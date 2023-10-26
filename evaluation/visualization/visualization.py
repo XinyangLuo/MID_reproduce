@@ -3,13 +3,13 @@ import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
 import numpy as np
 import seaborn as sns
-
+import torch
 
 def plot_trajectories(ax,
                       prediction_dict,
                       histories_dict,
                       futures_dict,
-                      line_alpha=0.7,
+                      line_alpha=1.0,
                       line_width=0.2,
                       edge_width=2,
                       circle_edge_width=0.5,
@@ -21,10 +21,16 @@ def plot_trajectories(ax,
 
     node_cmap = ['#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
 
+    history_list = []
+    future_list = []
+    predictions_list = []
     for i, node in enumerate(histories_dict):
         history = histories_dict[node]
         future = futures_dict[node]
         predictions = prediction_dict[node]
+        history_list.append(history)
+        future_list.append(future)
+        predictions_list.append(predictions)
 
         if np.isnan(history[-1]).any():
             continue
@@ -63,6 +69,9 @@ def plot_trajectories(ax,
             ax.add_artist(circle)
 
     ax.axis('equal')
+    torch.save(history_list, 'historys.pt')
+    torch.save(future_list, 'futures.pt')
+    torch.save(predictions_list, 'predictions.pt')
 
 
 def visualize_prediction(ax,

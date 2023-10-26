@@ -18,7 +18,7 @@ from models.autoencoder import AutoEncoder
 from models.trajectron import Trajectron
 from utils.model_registrar import ModelRegistrar
 from utils.trajectron_hypers import get_traj_hypers
-from visualize_result import visualize_timestep_prediction, visualize_timesteps_prediction, visualize_timestep_prediction_map
+from visualize_result import visualize_timestep_prediction, visualize_timesteps_prediction, visualize_timestep_prediction_map, visualize_node_prediction
 import evaluation
 
 class MID():
@@ -124,11 +124,10 @@ class MID():
         ph = self.hyperparams['prediction_horizon']
         max_hl = self.hyperparams['maximum_history_length']
 
-
-        for i, scene in enumerate(self.eval_scenes):
+        for i, scene in enumerate([self.eval_scenes[19]]):
             print(f"----- Evaluating Scene {i + 1}/{len(self.eval_scenes)}")
             for t in tqdm(range(0, scene.timesteps, 10)):
-                timesteps = np.arange(t,t+10)
+                timesteps = np.arange(t,t+8)
                 batch = get_timesteps_data(env=self.eval_env, scene=scene, t=timesteps, node_type=node_type, state=self.hyperparams['state'],
                                pred_state=self.hyperparams['pred_state'], edge_types=self.eval_env.get_edge_types(),
                                min_ht=7, max_ht=self.hyperparams['maximum_history_length'], min_ft=12,
@@ -138,21 +137,30 @@ class MID():
                 test_batch = batch[0]
                 nodes = batch[1]
                 timesteps_o = batch[2]
-                ego_trajectory = batch[3]
-                ego_timesteps = batch[4]
-                traj_pred = self.model.generate(test_batch, node_type, num_points=12, sample=20,bestof=True, sampling=sampling, step=step) # B * 20 * 12 * 2
+                (test_batch, nodes, timesteps_o, target_positions, ego_positions, timestep_alignment) = batch
+                traj_pred = self.model.generate(test_batch, node_type, num_points=12, sample=20,bestof=True, sampling=sampling, step=step,
+                                                guidance=self.hyperparams['guidance'], target_positions=target_positions, ego_positions=ego_positions, timestep_alignment=timestep_alignment) # 20 * B * 12 * 2
+
+                node_cmap = ['#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+                # for i, index in enumerate(timestep_alignment):
+                #     visualize_node_prediction(traj_pred[:, i], ego_positions[index + 1:index + 1 + ph], node_cmap[i])
+                visualize_node_prediction(traj_pred[:, 4], ego_positions[timestep_alignment[4] + 1:timestep_alignment[4] + 1 + ph], node_cmap[4])
 
                 predictions = traj_pred
                 predictions_dict = {}
+                alignment_dict = {}
                 for i, ts in enumerate(timesteps_o):
                     if ts not in predictions_dict.keys():
                         predictions_dict[ts] = dict()
                     predictions_dict[ts][nodes[i]] = np.transpose(predictions[:, [i]], (1, 0, 2, 3))
+                    alignment_dict[ts] = timestep_alignment[i]
                 
                 predictions_timesteps = list(predictions_dict.keys())
-                # visualize_timesteps_prediction(predictions_dict,ego_trajectory, ego_timesteps, scene.dt, max_hl, ph)
-                # visualize_timestep_prediction(predictions_timesteps[0], predictions_dict[predictions_timesteps[0]], ego_trajectory, ego_timesteps, scene.dt, max_hl, ph)
-                visualize_timestep_prediction_map(predictions_timesteps[0], predictions_dict[predictions_timesteps[0]], ego_trajectory, ego_timesteps, scene.dt, max_hl, ph, 'singapore-onenorth', (200, 900, 300, 950))
+                # visualize_timesteps_prediction(predictions_dict,ego_positions, alignment_dict, scene.dt, max_hl, ph)
+                visualize_timestep_prediction(predictions_timesteps[0], predictions_dict[predictions_timesteps[0]], ego_positions, alignment_dict[predictions_timesteps[0]], scene.dt, max_hl, ph)
+                # visualize_timestep_prediction_map(predictions_timesteps[0], predictions_dict[predictions_timesteps[0]], ego_positions, alignment_dict[predictions_timesteps[0]], scene.dt, max_hl, ph, 
+                #                                   'boston-seaport', (650, 1350, 800, 1500))
+
                 return
                 batch_error_dict = evaluation.compute_batch_statistics(predictions_dict,
                                                                        scene.dt,

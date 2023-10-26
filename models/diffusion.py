@@ -82,7 +82,8 @@ class DiffusionTraj(Module):
         loss = F.mse_loss(e_theta.view(-1, point_dim), e_rand.view(-1, point_dim), reduction='mean')
         return loss
 
-    def sample(self, num_points, context, sample, bestof, point_dim=2, flexibility=0.0, ret_traj=False, sampling="ddpm", step=100, guidance=False, dynamics=None):
+    def sample(self, num_points, context, sample, bestof, point_dim=2, flexibility=0.0, ret_traj=False, sampling="ddpm", step=100,
+               guidance=False, dynamics=None, target_positions=None, ego_positions=None):
         traj_list = []
         for i in range(sample):
             batch_size = context.size(0)
@@ -113,11 +114,13 @@ class DiffusionTraj(Module):
                     else :
                         x_t.requires_grad_()
                         pos = dynamics.integrate_samples(x_t)
-                        target = torch.tensor([0.0, 10.0]).repeat(x_t.shape[0], 1).cuda()
-                        J = -torch.norm(pos[:, -1, :] - target, 1, dim = 1).sum()
+                        J_ego = -torch.norm(pos - ego_positions, dim=2).min(dim=1)[0].sum()
+                        # J_ego = -torch.norm(pos[mask] - ego_positions[mask], dim=2).min(dim=1)[0].sum() if mask.any() else 0.0
+                        J_target = -torch.norm(pos[:, -1, :] - target_positions, dim=1).sum()
+                        J = J_ego*0.05 + J_target*0.05
                         grad = torch.autograd.grad(J, x_t)[0]
                         x_t.detach()
-                        x_next = c0 * (x_t - c1 * e_theta) + sigma * z + grad*0.1
+                        x_next = c0 * (x_t - c1 * e_theta) + sigma * z + grad
 
                 elif sampling == "ddim":
                     x0_t = (x_t - e_theta * (1 - alpha_bar).sqrt()) / alpha_bar.sqrt()
