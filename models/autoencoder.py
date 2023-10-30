@@ -30,20 +30,20 @@ class AutoEncoder(Module):
         return z
     
     def generate(self, batch, node_type, num_points, sample, bestof,flexibility=0.0, ret_traj=False, sampling="ddpm", step=100,
-                 guidance=False, target_positions=None, ego_positions=None, timestep_alignment=None):
+                 guidance=False, target_positions=None, ego_positions=None):
         #print(f"Using {sampling}")
         dynamics = self.encoder.node_models_dict[node_type].dynamic
         encoded_x = self.encoder.get_latent(batch, node_type)
         if not guidance:
             predicted_y_vel =  self.diffusion.sample(num_points, encoded_x,sample,bestof, flexibility=flexibility, ret_traj=ret_traj, sampling=sampling, step=step, guidance=guidance)
         else:
-            target_positions=torch.tensor(target_positions).to(encoded_x.device) # B * 2
-            ego_positions_aligned = torch.stack([ego_positions[index + 1:index + 1 + num_points] for index in timestep_alignment]).to(encoded_x.device) # B * 12 * 2
-            # mask = torch.norm(target_positions.unsqueeze(1) - ego_positions_aligned, dim = 2).min(dim=1)[0] <= 5.0
+            target_positions = torch.tensor(target_positions).to(encoded_x.device)
+            ego_positions = torch.tensor(ego_positions[:, -num_points:, :]).to(encoded_x.device) # B * 12 * 2
             predicted_y_vel =  self.diffusion.sample(num_points, encoded_x,sample,bestof, flexibility=flexibility, ret_traj=ret_traj, sampling=sampling, step=step, guidance=guidance,
-                                                     dynamics=dynamics, target_positions=target_positions, ego_positions=ego_positions_aligned)
+                                                     dynamics=dynamics, target_positions=target_positions, ego_positions=ego_positions)
         predicted_y_pos = dynamics.integrate_samples(predicted_y_vel)
-        return predicted_y_pos.cpu().detach().numpy()
+        predicted_y_acc, predicted_y_jerk = dynamics.derivate_samples(predicted_y_vel)
+        return predicted_y_pos.cpu().detach().numpy(), predicted_y_vel.cpu().detach().numpy(), predicted_y_acc.cpu().detach().numpy(), predicted_y_jerk.cpu().detach().numpy()
 
     def get_loss(self, batch, node_type):
         (first_history_index,

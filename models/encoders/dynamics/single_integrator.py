@@ -229,6 +229,12 @@ class SingleIntegrator(Dynamic):
         self.F[0:2, 2:] = torch.eye(2, device=self.device, dtype=torch.float32) * self.dt
         self.F_t = self.F.transpose(-2, -1)
 
+    def derivate_samples(self, v):
+        v_norm = torch.norm(v, dim=-1)
+        acc = (v_norm[..., 1:] - v_norm[..., :-1])/self.dt
+        jerk = (acc[..., 1:] - acc[..., :-1])/self.dt
+        return acc, jerk
+
     def integrate_samples(self, v, x=None):
         """
         Integrates deterministic samples of velocity.

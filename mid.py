@@ -134,31 +134,28 @@ class MID():
                                max_ft=12, hyperparams=self.hyperparams)
                 if batch is None:
                     continue
-                test_batch = batch[0]
-                nodes = batch[1]
-                timesteps_o = batch[2]
-                (test_batch, nodes, timesteps_o, target_positions, ego_positions, timestep_alignment) = batch
+                (test_batch, nodes, timesteps_o, target_positions, ego_positions) = batch
                 traj_pred = self.model.generate(test_batch, node_type, num_points=12, sample=20,bestof=True, sampling=sampling, step=step,
-                                                guidance=self.hyperparams['guidance'], target_positions=target_positions, ego_positions=ego_positions, timestep_alignment=timestep_alignment) # 20 * B * 12 * 2
+                                                guidance=self.hyperparams['guidance'], target_positions=target_positions, ego_positions=ego_positions) # 20 * B * 12 * 2
+                (pred_positions, pred_velocities, pred_accelerations, pred_jerks) = traj_pred
 
-                node_cmap = ['#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
-                # for i, index in enumerate(timestep_alignment):
-                #     visualize_node_prediction(traj_pred[:, i], ego_positions[index + 1:index + 1 + ph], node_cmap[i])
-                visualize_node_prediction(traj_pred[:, 4], ego_positions[timestep_alignment[4] + 1:timestep_alignment[4] + 1 + ph], node_cmap[4])
+                if self.hyperparams['guidance']:
+                    for i in range(pred_positions.shape[1]):
+                        visualize_node_prediction(pred_positions[:, i], pred_velocities[:, i], pred_accelerations[:, i], pred_jerks[:, i], ego_positions[i, -12:, :], i)
 
-                predictions = traj_pred
+                predictions = pred_positions
                 predictions_dict = {}
-                alignment_dict = {}
+                ego_positions_dict = {}
                 for i, ts in enumerate(timesteps_o):
                     if ts not in predictions_dict.keys():
                         predictions_dict[ts] = dict()
+                        ego_positions_dict[ts] = ego_positions[i]
                     predictions_dict[ts][nodes[i]] = np.transpose(predictions[:, [i]], (1, 0, 2, 3))
-                    alignment_dict[ts] = timestep_alignment[i]
                 
                 predictions_timesteps = list(predictions_dict.keys())
-                # visualize_timesteps_prediction(predictions_dict,ego_positions, alignment_dict, scene.dt, max_hl, ph)
-                visualize_timestep_prediction(predictions_timesteps[0], predictions_dict[predictions_timesteps[0]], ego_positions, alignment_dict[predictions_timesteps[0]], scene.dt, max_hl, ph)
-                # visualize_timestep_prediction_map(predictions_timesteps[0], predictions_dict[predictions_timesteps[0]], ego_positions, alignment_dict[predictions_timesteps[0]], scene.dt, max_hl, ph, 
+                # visualize_timesteps_prediction(predictions_dict, ego_positions_dict, scene.dt, max_hl, ph)
+                visualize_timestep_prediction(predictions_timesteps[0], predictions_dict[predictions_timesteps[0]], ego_positions_dict[predictions_timesteps[0]], scene.dt, max_hl, ph)
+                # visualize_timestep_prediction_map(predictions_timesteps[0], predictions_dict[predictions_timesteps[0]], ego_positions_dict[predictions_timesteps[0]], scene.dt, max_hl, ph, 
                 #                                   'boston-seaport', (650, 1350, 800, 1500))
 
                 return

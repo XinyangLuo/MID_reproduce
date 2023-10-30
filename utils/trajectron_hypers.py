@@ -73,6 +73,7 @@ def get_traj_hypers():
             }
         },
     'pred_state': {'PEDESTRIAN': {'velocity': ['x', 'y']}, 'VEHICLE': {'velocity': ['x', 'y']}},
+    'critical_obstacles': True,
     'guidance': True,
     'log_histograms': False,
     'dynamic_edges': 'yes',

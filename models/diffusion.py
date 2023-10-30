@@ -114,10 +114,14 @@ class DiffusionTraj(Module):
                     else :
                         x_t.requires_grad_()
                         pos = dynamics.integrate_samples(x_t)
+                        acc, jerk = dynamics.derivate_samples(x_t)
+
                         J_ego = -torch.norm(pos - ego_positions, dim=2).min(dim=1)[0].sum()
-                        # J_ego = -torch.norm(pos[mask] - ego_positions[mask], dim=2).min(dim=1)[0].sum() if mask.any() else 0.0
-                        J_target = -torch.norm(pos[:, -1, :] - target_positions, dim=1).sum()
-                        J = J_ego*0.05 + J_target*0.05
+                        # J_target = -torch.norm(pos[:, -1, :] - target_positions, dim=1).sum()
+                        J_target = -torch.norm(pos - target_positions, dim=2).min(dim=1)[0].sum()
+                        J_acc = -(acc.abs() - 2.0).clamp(min=0.0).sum()
+                        J_jerk = -jerk.abs().sum()
+                        J = J_ego*0.05 + J_target*0.05 + J_acc*0.002 + J_jerk*0.002
                         grad = torch.autograd.grad(J, x_t)[0]
                         x_t.detach()
                         x_next = c0 * (x_t - c1 * e_theta) + sigma * z + grad
@@ -131,7 +135,6 @@ class DiffusionTraj(Module):
                 traj[t] = traj[t].cpu()         # Move previous output to CPU memory.
                 if not ret_traj:
                    del traj[t]
-
             if ret_traj:
                 traj_list.append(traj)
             else:

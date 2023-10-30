@@ -216,7 +216,8 @@ def get_timesteps_data(env, scene, t, node_type, state, pred_state,
     batch = list()
     nodes = list()
     out_timesteps = list()
-    target_positions = list()
+    nodes_positions = list()
+    ego_positions = list()
     for timestep in nodes_per_ts.keys():
             scene_graph = scene.get_scene_graph(timestep,
                                                 env.attention_radius,
@@ -229,15 +230,21 @@ def get_timesteps_data(env, scene, t, node_type, state, pred_state,
                 batch.append(get_node_timestep_data(env, scene, timestep, node, state, pred_state,
                                                     edge_types, max_ht, max_ft, hyperparams,
                                                     scene_graph=scene_graph))
-                target_positions.append(node.get(np.array([timestep + max_ft]), {'position': ['x', 'y']}))
+                nodes_positions.append(node.get(np.array([timestep + 1, timestep + max_ft]), {'position': ['x', 'y']}))
+                ego_positions.append(scene.ego_node.get(np.array([timestep - max_ht, timestep + max_ft]), {'position': ['x', 'y']}))
     if len(out_timesteps) == 0:
         return None
-    target_positions = np.concatenate(target_positions)
-    
-    # ego node
-    ego_timesteps = np.array([min(out_timesteps) - max_ht, max(out_timesteps) + max_ft])
-    ego_positions = scene.ego_node.get(ego_timesteps, {'position': ['x', 'y']})
-    ego_positions = torch.tensor(ego_positions, dtype=torch.float)
-    timestep_alignment = out_timesteps - ego_timesteps[0]
+    nodes_positions = np.stack(nodes_positions)
+    ego_positions = np.stack(ego_positions) # B * (7 + 1 + 12) * 2
+    target_positions = nodes_positions[:, -1, :]
 
-    return collate(batch), nodes, out_timesteps, target_positions, ego_positions, timestep_alignment
+    # critical obstacle selection
+    if hyperparams['critical_obstacles']:
+        critical_mask = np.linalg.norm(nodes_positions - ego_positions[:, max_ht + 1:, :], axis=2).min(axis=1) <= 5.0
+        batch = [data for data, select in zip(batch, critical_mask) if select]
+        nodes = [node for node, select in zip(nodes, critical_mask) if select]
+        out_timesteps = [timestep for timestep, select in zip(out_timesteps, critical_mask) if select]
+        target_positions = target_positions[critical_mask]
+        ego_positions = ego_positions[critical_mask]
+
+    return collate(batch), nodes, out_timesteps, target_positions, ego_positions
