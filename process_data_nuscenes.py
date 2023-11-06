@@ -84,14 +84,16 @@ def process_vehicle_data(x, y, heading, dt):
     # heading_x = heading_v[:, 0]
     # heading_y = heading_v[:, 1]
 
+    v_norm = np.linalg.norm(np.stack((vx, vy), axis=-1), axis=-1)
+
     data_dict = {('position', 'x'): x,
                  ('position', 'y'): y,
                  ('velocity', 'x'): vx,
                  ('velocity', 'y'): vy,
-                  ('velocity', 'norm'): np.linalg.norm(np.stack((vx, vy), axis=-1), axis=-1),
+                  ('velocity', 'norm'): v_norm,
                  ('acceleration', 'x'): ax,
                  ('acceleration', 'y'): ay,
-                 ('acceleration', 'norm'): np.linalg.norm(np.stack((ax, ay), axis=-1), axis=-1),
+                 ('acceleration', 'norm'): derivative_of(v_norm, dt),
                  #  ('heading', 'x'): heading_x,
                  #  ('heading', 'y'): heading_y,
                  ('heading', '°'): heading,
