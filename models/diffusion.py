@@ -114,7 +114,7 @@ class DiffusionTraj(Module):
                     else :
                         x_t.requires_grad_()
                         pos = dynamics.integrate_samples(x_t)
-                        vel, acc, jerk = dynamics.derivate_samples(x_t)
+                        derivations = dynamics.derivate_samples(x_t)
 
                         (target_positions, ego_positions, nodes_centreline_poses) = guidance_data
                         target_positions = torch.tensor(target_positions).to(context.device)
@@ -125,13 +125,24 @@ class DiffusionTraj(Module):
                         J_target = -torch.norm(pos - target_positions, dim=2).min(dim=1)[0].sum()
                         max_distance_centreline = torch.zeros(len(pos)).to(context.device)
                         for node_index in range(len(pos)):
-                            distance = [torch.min(torch.norm(pos[node_index, j] - nodes_centreline_poses[node_index][:, :2], dim=1)) for j in range(len(pos[node_index]))]
+                            distance = [torch.min(torch.norm(pos[node_index, j] - nodes_centreline_poses[node_index][:, :2], dim=1)) for j in range(num_points)]
                             max_distance_centreline[node_index] = max(distance)
-                            # max_distance_arcline[node_index] = torch.min(torch.norm(pos[node_index, -1] - arcline_poses[node_index], dim=-1))
                         J_centreline = -(max_distance_centreline - 5.0).clamp(min=0.0).sum()
-                        J_acc = -(acc.abs() - 2.0).clamp(min=0.0).sum()
-                        J_jerk = -jerk.abs().sum()
-                        J = J_ego*0.05 + J_target*0.05 + J_acc*0.002 + J_jerk*0.002 + J_centreline*0.05
+
+                        # SingleIntegrator
+                        if len(derivations) == 3:
+                            (vel, acc, jerk) = derivations
+                            J_acc = -(acc.abs() - 2.0).clamp(min=0.0).sum()
+                            J_jerk = -jerk.abs().sum()
+                            J = J_ego*0.05 + J_target*0.05 + J_centreline*0.05 + J_acc*0.002 + J_jerk*0.002
+                        # Unicycle
+                        elif len(derivations) == 6:
+                            (vel, acc, jerk, angular_vel, angular_acc, angular_jerk) = derivations
+                            J_vel = -(angular_vel.abs() - 0.2).clamp(min=0.0).sum()
+                            J_acc = -(acc.abs() - 2.0).clamp(min=0.0).sum() - (angular_acc.abs() - 0.5).clamp(min=0.0).sum()
+                            J_jerk = -jerk.abs().sum() - angular_jerk.abs().sum()*0.5
+                            J = J_ego*0.01 + J_target*0.01 + J_centreline*0.02 + J_acc*0.005 + J_jerk*0.005 + J_vel*0.005
+
                         grad = torch.autograd.grad(J, x_t)[0]
                         x_t.detach()
                         x_next = c0 * (x_t - c1 * e_theta) + sigma * z + grad

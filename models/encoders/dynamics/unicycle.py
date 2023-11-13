@@ -17,6 +17,15 @@ class Unicycle(Dynamic):
         model_if_absent = nn.Linear(xz_size + 1, 1)
         self.p0_model = self.model_registrar.get_model(f"{self.node_type}/unicycle_initializer", model_if_absent)
 
+    def derivate_samples(self, control_samples):
+        vel = torch.cumsum(control_samples[..., 1], dim=-1)*self.dt + torch.norm(self.initial_conditions['vel'], dim=-1).unsqueeze(0).unsqueeze(2)
+        acc = control_samples[..., 1]
+        jerk = (acc[..., 1:] - acc[..., :-1])/self.dt
+        angular_vel = control_samples[..., 0]
+        angular_acc = (angular_vel[..., 1:] - angular_vel[..., :-1])/self.dt
+        angular_jerk = (angular_acc[..., 1:] - angular_acc[..., :-1])/self.dt
+        return vel, acc, jerk, angular_vel, angular_acc, angular_jerk
+    
     def dynamic(self, x, u):
         r"""
         TODO: Boris: Add docstring

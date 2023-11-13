@@ -278,4 +278,4 @@ def get_node_centreline_poses(node_positions, nusc_map):
         next_index = np.linalg.norm(node_positions[i+1, :2]- arcline_poses[:, :2], axis=1).argmin()
         for j in range(last_index+1, next_index+1):
             node_centreline_poses.append(arcline_poses[j])
-    return node_centreline_poses
+    return np.array(node_centreline_poses)

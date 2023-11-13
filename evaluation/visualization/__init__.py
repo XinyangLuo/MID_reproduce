@@ -1,2 +1,2 @@
-from .visualization import visualize_prediction
+from .visualization import visualize_prediction, visualize_prediction_with_ego, visualize_prediction_with_map, visualize_prediction_with_derivations
 from .visualization_utils import plot_boxplots

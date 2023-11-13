@@ -18,7 +18,9 @@ from models.autoencoder import AutoEncoder
 from models.trajectron import Trajectron
 from utils.model_registrar import ModelRegistrar
 from utils.trajectron_hypers import get_traj_hypers
-from visualize_result import visualize_timestep_prediction, visualize_timesteps_prediction, visualize_timestep_prediction_map, visualize_node_prediction
+import evaluation.visualization as vis
+import matplotlib.pyplot as plt
+from nuscenes.map_expansion.map_api import NuScenesMap
 import evaluation
 
 class MID():
@@ -110,7 +112,7 @@ class MID():
                     'encoder': self.registrar.model_dict,
                     'ddpm': self.model.state_dict()
                  }
-                torch.save(checkpoint, osp.join(self.model_dir, f"{self.config.dataset}_epoch{epoch}.pt"))
+                torch.save(checkpoint, osp.join(self.model_dir, f"{self.config.dataset}_{self.config.vehicle_dynamics.lower()}_epoch{epoch}.pt"))
 
                 self.model.train()
 
@@ -126,44 +128,55 @@ class MID():
         ph = self.hyperparams['prediction_horizon']
         max_hl = self.hyperparams['maximum_history_length']
 
-        for i, scene in enumerate([self.eval_scenes[19]]):
-        # for i, scene in enumerate(self.eval_scenes):
+        if self.config['specify_eval_scene']:
+            scene = self.eval_scenes[self.config['eval_scene_index']]
+            timestep = self.config['eval_timestep']
+            batch = get_timesteps_data(env=self.eval_env, scene=scene, t=np.array([timestep]), node_type=node_type, state=self.hyperparams['state'],
+                               pred_state=self.hyperparams['pred_state'], edge_types=self.eval_env.get_edge_types(),
+                               min_ht=7, max_ht=self.hyperparams['maximum_history_length'], min_ft=12,
+                               max_ft=12, hyperparams=self.hyperparams)
+            if batch is None:
+                return
+            (test_batch, nodes, timesteps_o, guidance_data) = batch
+            traj_pred = self.model.generate(test_batch, node_type, num_points=12, sample=20, bestof=True, sampling=sampling, step=step,
+                                            guidance=self.hyperparams['guidance'], guidance_data=guidance_data) # 20 * B * 12 * 2
+            predicted_positions, predicted_derivations = traj_pred
+            (target_positions, ego_positions, nodes_centreline_poses) = guidance_data
+            for i in range(len(nodes)):
+                vis.visualize_prediction_with_derivations(predicted_positions[:, i], [x[:, i] for x in predicted_derivations], ego_positions[i], nodes_centreline_poses[i], i)
+            predictions_dict = dict() 
+            for i in range(len(nodes)):
+                predictions_dict[nodes[i]] = np.transpose(predicted_positions[:, [i]], (1, 0, 2, 3))
+            if self.config['visualize_with_map']:
+                nusc_map = NuScenesMap(dataroot=self.config['dataset_path'], map_name=scene.map_name)
+                vis.visualize_prediction_with_map(timestep, predictions_dict, ego_positions[0], scene.dt, max_hl, ph, nusc_map)
+            else:
+                vis.visualize_prediction_with_ego(timestep, predictions_dict, ego_positions[0], scene.dt, max_hl, ph)
+            plt.show()
+            return
+
+        for i, scene in enumerate(self.eval_scenes):
             print(f"----- Evaluating Scene {i + 1}/{len(self.eval_scenes)}")
             for t in tqdm(range(0, scene.timesteps, 10)):
-                timesteps = np.arange(t,t+8)
-                # timesteps = np.arange(t,t+10)
+                timesteps = np.arange(t,t+10)
                 batch = get_timesteps_data(env=self.eval_env, scene=scene, t=timesteps, node_type=node_type, state=self.hyperparams['state'],
                                pred_state=self.hyperparams['pred_state'], edge_types=self.eval_env.get_edge_types(),
                                min_ht=7, max_ht=self.hyperparams['maximum_history_length'], min_ft=12,
                                max_ft=12, hyperparams=self.hyperparams)
                 if batch is None:
                     continue
-                (test_batch, nodes, timesteps_o, guidance_data) = batch
+                test_batch = batch[0]
+                nodes = batch[1]
+                timesteps_o = batch[2]
+                traj_pred = self.model.generate(test_batch, node_type, num_points=12, sample=20, bestof=True, sampling=sampling, step=step) # B * 20 * 12 * 2
 
-                traj_pred = self.model.generate(test_batch, node_type, num_points=12, sample=20,bestof=True, sampling=sampling, step=step,
-                                                guidance=self.hyperparams['guidance'], guidance_data=guidance_data) # 20 * B * 12 * 2
-                pred_positions, predicted_derivations = traj_pred
-
-                if self.hyperparams['guidance']:
-                    for i in range(pred_positions.shape[1]):
-                        visualize_node_prediction(pred_positions[:, i], [x[:, i] for x in predicted_derivations], guidance_data[1][i, -12:, :], i)
-
-                predictions = pred_positions
+                predictions = traj_pred[0]
                 predictions_dict = {}
-                ego_positions_dict = {}
                 for i, ts in enumerate(timesteps_o):
                     if ts not in predictions_dict.keys():
                         predictions_dict[ts] = dict()
-                        ego_positions_dict[ts] = guidance_data[1][i]
                     predictions_dict[ts][nodes[i]] = np.transpose(predictions[:, [i]], (1, 0, 2, 3))
-                
-                predictions_timesteps = list(predictions_dict.keys())
-                # visualize_timesteps_prediction(predictions_dict, ego_positions_dict, scene.dt, max_hl, ph)
-                visualize_timestep_prediction(predictions_timesteps[0], predictions_dict[predictions_timesteps[0]], ego_positions_dict[predictions_timesteps[0]], scene.dt, max_hl, ph)
-                # visualize_timestep_prediction_map(predictions_timesteps[0], predictions_dict[predictions_timesteps[0]], ego_positions_dict[predictions_timesteps[0]], scene.dt, max_hl, ph, 
-                #                                   'boston-seaport', (650, 1350, 800, 1500))
 
-                return
                 batch_error_dict = evaluation.compute_batch_statistics(predictions_dict,
                                                                        scene.dt,
                                                                        max_hl=max_hl,
@@ -242,18 +255,21 @@ class MID():
 
     def _build_encoder_config(self):
 
-        self.hyperparams = get_traj_hypers()
+        self.hyperparams = get_traj_hypers(self.config.vehicle_dynamics)
         self.hyperparams['enc_rnn_dim_edge'] = self.config.encoder_dim//2
         self.hyperparams['enc_rnn_dim_edge_influence'] = self.config.encoder_dim//2
         self.hyperparams['enc_rnn_dim_history'] = self.config.encoder_dim//2
         self.hyperparams['enc_rnn_dim_future'] = self.config.encoder_dim//2
+        self.hyperparams['dataset_path'] = self.config.dataset_path
+        self.hyperparams['guidance'] = self.config.guidance
+        self.hyperparams['critical_obstacles'] = self.config.critical_obstacles
         # registar
         self.registrar = ModelRegistrar(self.model_dir, "cuda")
 
         if self.config.eval_mode:
             epoch = self.config.eval_at
             checkpoint_dir = osp.join(self.model_dir, f"{self.config.dataset}_epoch{epoch}.pt")
-            self.checkpoint = torch.load(osp.join(self.model_dir, f"{self.config.dataset}_epoch{epoch}.pt"), map_location = "cpu")
+            self.checkpoint = torch.load(osp.join(self.model_dir, f"{self.config.dataset}_{self.config.vehicle_dynamics.lower()}_epoch{epoch}.pt"), map_location = "cpu")
 
             self.registrar.load_models(self.checkpoint['encoder'])
 

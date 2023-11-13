@@ -3,7 +3,8 @@ import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
 import numpy as np
 import seaborn as sns
-import torch
+
+node_cmap = ['#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
 
 def plot_trajectories(ax,
                       prediction_dict,
@@ -18,8 +19,6 @@ def plot_trajectories(ax,
                       kde=False):
 
     cmap = ['k', 'b', 'y', 'g', 'r']
-
-    node_cmap = ['#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
 
     history_list = []
     future_list = []
@@ -69,9 +68,6 @@ def plot_trajectories(ax,
             ax.add_artist(circle)
 
     ax.axis('equal')
-    torch.save(history_list, 'historys.pt')
-    torch.save(future_list, 'futures.pt')
-    torch.save(predictions_list, 'predictions.pt')
 
 
 def visualize_prediction(ax,
@@ -101,3 +97,51 @@ def visualize_prediction(ax,
     if map is not None:
         ax.imshow(map.as_image(), origin='lower', alpha=0.5)
     plot_trajectories(ax, prediction_dict, histories_dict, futures_dict, *kwargs)
+
+def plot_ego_positions(ax, ego_positions, max_hl):
+    ax.plot(ego_positions[0: max_hl, 0], ego_positions[0: max_hl, 1], '--', c='#1f77b4', alpha = 0.6)
+    ax.plot(ego_positions[max_hl + 1:, 0], ego_positions[max_hl + 1:, 1], c='#1f77b4', alpha = 0.6)
+    circle = plt.Circle((ego_positions[max_hl, 0], ego_positions[max_hl, 1]), 0.3, facecolor='g', edgecolor='k', lw=0.5, zorder=3)
+    ax.add_artist(circle)
+
+def visualize_prediction_with_ego(t, predictions_dict, ego_positions, dt, max_hl, ph):
+    fig = plt.figure(figsize=(8, 8))
+    ax = fig.add_axes([0.1, 0.1, 0.8, 0.8])
+    visualize_prediction(ax, {t: predictions_dict}, dt, max_hl=max_hl, ph=ph)
+    plot_ego_positions(ax, ego_positions, max_hl)
+    ax.set_title("timestep " + str(t))
+
+def visualize_prediction_with_map(t, predictions_dict, ego_positions, dt, max_hl, ph, nusc_map):
+    patch = (ego_positions[:, 0].mean()-100.0, ego_positions[:, 1].mean()-100.0, ego_positions[:, 0].mean()+100.0, ego_positions[:, 1].mean()+100.0)
+    fig, ax = nusc_map.render_map_patch(patch, ['drivable_area', 'lane'], figsize=(10, 10))
+    visualize_prediction(ax, {t: predictions_dict}, dt, max_hl=max_hl, ph=ph)
+    plot_ego_positions(ax, ego_positions, max_hl)
+    ax.set_xlim(patch[0], patch[2])
+    ax.set_ylim(patch[1], patch[3])
+
+def visualize_prediction_with_derivations(predicted_positions, predicted_derivations, ego_positions, node_centreline_poses, index=0, dt=0.5):
+    fig = plt.figure("node " + str(index), figsize=(16, 10))
+    fig_kinematic = plt.figure("node " + str(index) + " kinematic", figsize=(16, 10))
+    ts = np.linspace(0.0, dt*predicted_derivations[0].shape[1], predicted_derivations[0].shape[1])
+    for i in range(20):
+        ax = fig.add_subplot(4, 5, i + 1)
+        ax.plot(predicted_positions[i, :, 0], predicted_positions[i, :, 1], '-o', c=node_cmap[index], alpha = 0.6)
+        ax.plot(ego_positions[:, 0], ego_positions[:, 1], '-o', c='#1f77b4', alpha = 0.6)
+        ax.plot(node_centreline_poses[:, 0], node_centreline_poses[:, 1], 'gray', alpha = 0.6)
+        ax.legend(['node', 'ego', 'centreline'])
+        ax.axis('equal')
+
+        ax = fig_kinematic.add_subplot(4, 5, i + 1)
+        if len(predicted_derivations) == 3:
+            ax.plot(ts, predicted_derivations[0][i], '-o', alpha = 0.6)
+            ax.plot(ts[:-1], predicted_derivations[1][i], '-o', alpha = 0.6)
+            ax.plot(ts[:-2], predicted_derivations[2][i], '-o', alpha = 0.6)
+            ax.legend(['vel', 'acc', 'jerk'])
+        elif len(predicted_derivations) == 6:
+            ax.plot(ts, predicted_derivations[0][i], '-o', alpha = 0.6)
+            ax.plot(ts, predicted_derivations[1][i], '-o', alpha = 0.6)
+            ax.plot(ts[:-1], predicted_derivations[2][i], '-o', alpha = 0.6)
+            ax.plot(ts, predicted_derivations[3][i], '-o', alpha = 0.6)
+            ax.plot(ts[:-1], predicted_derivations[4][i], '-o', alpha = 0.6)
+            ax.plot(ts[:-2], predicted_derivations[5][i], '-o', alpha = 0.6)
+            ax.legend(['vel', 'acc', 'jerk', 'angular_vel', 'angular_acc', 'angular_jerk'])   

@@ -1,5 +1,24 @@
-def get_traj_hypers():
-    hypers = {   'batch_size': 256,
+def get_traj_hypers(vehicle_dynamics):
+    state_dict = {
+    'SingleIntegrator':
+        {'position': ['x', 'y'],
+         'velocity': ['x', 'y'],
+         'acceleration': ['x', 'y'],
+        },
+    'Unicycle':
+        {'position': ['x', 'y'],
+         'velocity': ['x', 'y'],
+         'acceleration': ['x', 'y'],
+         'heading': ['°', 'd°']
+        }
+    }
+    pred_state_dict = {
+    'SingleIntegrator': {'velocity': ['x', 'y']},
+    'Unicycle': {'heading': ['d°'], 'acceleration': ['norm']}
+    }
+
+    hypers = {
+    'batch_size': 256,
     'grad_clip': 1.0,
     'learning_rate_style': 'exp',
     'min_learning_rate': 1e-05,
@@ -55,7 +74,7 @@ def get_traj_hypers():
              'limits': {}
             },
          'VEHICLE':
-            {'name': 'SingleIntegrator',
+            {'name': vehicle_dynamics,
              'distribution': False,
              'limits': {}
             },
@@ -67,15 +86,9 @@ def get_traj_hypers():
              'acceleration': ['x', 'y']
             },
          'VEHICLE':
-            {'position': ['x', 'y'],
-             'velocity': ['x', 'y'],
-             'acceleration': ['x', 'y'],
-            }
+            state_dict[vehicle_dynamics],
         },
-    'pred_state': {'PEDESTRIAN': {'velocity': ['x', 'y']}, 'VEHICLE': {'velocity': ['x', 'y']}},
-    'guidance': True,
-    'critical_obstacles': True,
-    'dataset_path': '/home/yudie/dataset/nuscenes/full/',
+    'pred_state': {'PEDESTRIAN': {'velocity': ['x', 'y']}, 'VEHICLE': pred_state_dict[vehicle_dynamics]},
     'log_histograms': False,
     'dynamic_edges': 'yes',
     'edge_state_combine_method': 'sum',
