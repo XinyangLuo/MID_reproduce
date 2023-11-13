@@ -83,7 +83,7 @@ class DiffusionTraj(Module):
         return loss
 
     def sample(self, num_points, context, sample, bestof, point_dim=2, flexibility=0.0, ret_traj=False, sampling="ddpm", step=100,
-               guidance=False, dynamics=None, target_positions=None, ego_positions=None):
+               guidance=False, dynamics=None, guidance_data=None):
         traj_list = []
         for i in range(sample):
             batch_size = context.size(0)
@@ -114,14 +114,24 @@ class DiffusionTraj(Module):
                     else :
                         x_t.requires_grad_()
                         pos = dynamics.integrate_samples(x_t)
-                        acc, jerk = dynamics.derivate_samples(x_t)
+                        vel, acc, jerk = dynamics.derivate_samples(x_t)
+
+                        (target_positions, ego_positions, nodes_centreline_poses) = guidance_data
+                        target_positions = torch.tensor(target_positions).to(context.device)
+                        ego_positions = torch.tensor(ego_positions[:, -num_points:, :]).to(context.device) # B * 12 * 2
+                        nodes_centreline_poses = [torch.tensor(node_centreline_poses).to(context.device) for node_centreline_poses in nodes_centreline_poses]
 
                         J_ego = -torch.norm(pos - ego_positions, dim=2).min(dim=1)[0].sum()
-                        # J_target = -torch.norm(pos[:, -1, :] - target_positions, dim=1).sum()
                         J_target = -torch.norm(pos - target_positions, dim=2).min(dim=1)[0].sum()
+                        max_distance_centreline = torch.zeros(len(pos)).to(context.device)
+                        for node_index in range(len(pos)):
+                            distance = [torch.min(torch.norm(pos[node_index, j] - nodes_centreline_poses[node_index][:, :2], dim=1)) for j in range(len(pos[node_index]))]
+                            max_distance_centreline[node_index] = max(distance)
+                            # max_distance_arcline[node_index] = torch.min(torch.norm(pos[node_index, -1] - arcline_poses[node_index], dim=-1))
+                        J_centreline = -(max_distance_centreline - 5.0).clamp(min=0.0).sum()
                         J_acc = -(acc.abs() - 2.0).clamp(min=0.0).sum()
                         J_jerk = -jerk.abs().sum()
-                        J = J_ego*0.05 + J_target*0.05 + J_acc*0.002 + J_jerk*0.002
+                        J = J_ego*0.05 + J_target*0.05 + J_acc*0.002 + J_jerk*0.002 + J_centreline*0.05
                         grad = torch.autograd.grad(J, x_t)[0]
                         x_t.detach()
                         x_next = c0 * (x_t - c1 * e_theta) + sigma * z + grad

@@ -176,7 +176,7 @@ def process_scene(ns_scene, env, nusc):
                                              'z': annotation['translation'][2],
                                              'heading': Quaternion(annotation['rotation']).yaw_pitch_roll[0]})
 
-        # Ego Vehicle (omit)
+        # Ego Vehicle (delete)
 
         sample_data = nusc.get('sample_data', sample['data']['CAM_FRONT'])
         annotation = nusc.get('ego_pose', sample_data['ego_pose_token'])
@@ -199,7 +199,8 @@ def process_scene(ns_scene, env, nusc):
     scene = Scene(timesteps=max_timesteps + 1, dt=dt, name=str(scene_id), aug_func=augment)
     scene.ego_node = Node(node_type=env.NodeType.VEHICLE, node_id='ego', data=process_vehicle_data(np.array(ego_x), np.array(ego_y), np.array(ego_heading), scene.dt))
 
-    # Generate Maps (omit)
+    # Generate Maps (delete)
+    scene.map_name = nusc.get('log', ns_scene['log_token'])['location']
 
     for node_id in pd.unique(data['node_id']):
         node_df = data[data['node_id'] == node_id]
@@ -216,7 +217,7 @@ def process_scene(ns_scene, env, nusc):
         y = node_values[:, 1].astype(float)
         heading = node_df['heading'].values.astype(float)
 
-        # Kalman filter (omit)
+        # Kalman filter (delete)
 
         if node_df.iloc[0]['type'] == env.NodeType.VEHICLE:
             node_data = process_vehicle_data(x, y, heading, scene.dt)

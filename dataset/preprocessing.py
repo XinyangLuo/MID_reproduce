@@ -3,6 +3,8 @@ import numpy as np
 import collections.abc
 from torch.utils.data._utils.collate import default_collate
 import dill
+from nuscenes.map_expansion.map_api import NuScenesMap
+from nuscenes.map_expansion import arcline_path_utils
 container_abcs = collections.abc
 
 
@@ -216,8 +218,7 @@ def get_timesteps_data(env, scene, t, node_type, state, pred_state,
     batch = list()
     nodes = list()
     out_timesteps = list()
-    nodes_positions = list()
-    ego_positions = list()
+
     for timestep in nodes_per_ts.keys():
             scene_graph = scene.get_scene_graph(timestep,
                                                 env.attention_radius,
@@ -230,21 +231,51 @@ def get_timesteps_data(env, scene, t, node_type, state, pred_state,
                 batch.append(get_node_timestep_data(env, scene, timestep, node, state, pred_state,
                                                     edge_types, max_ht, max_ft, hyperparams,
                                                     scene_graph=scene_graph))
-                nodes_positions.append(node.get(np.array([timestep + 1, timestep + max_ft]), {'position': ['x', 'y']}))
-                ego_positions.append(scene.ego_node.get(np.array([timestep - max_ht, timestep + max_ft]), {'position': ['x', 'y']}))
     if len(out_timesteps) == 0:
         return None
-    nodes_positions = np.stack(nodes_positions)
-    ego_positions = np.stack(ego_positions) # B * (7 + 1 + 12) * 2
-    target_positions = nodes_positions[:, -1, :]
 
-    # critical obstacle selection
-    if hyperparams['critical_obstacles']:
-        critical_mask = np.linalg.norm(nodes_positions - ego_positions[:, max_ht + 1:, :], axis=2).min(axis=1) <= 5.0
-        batch = [data for data, select in zip(batch, critical_mask) if select]
-        nodes = [node for node, select in zip(nodes, critical_mask) if select]
-        out_timesteps = [timestep for timestep, select in zip(out_timesteps, critical_mask) if select]
-        target_positions = target_positions[critical_mask]
-        ego_positions = ego_positions[critical_mask]
+    guidance_data = None
+    if hyperparams['guidance']:
+        nodes_positions = list()
+        ego_positions = list()
+        nodes_centreline_poses = list()
+        for timestep in nodes_per_ts.keys():
+            present_nodes = nodes_per_ts[timestep]
+            nusc_map = NuScenesMap(dataroot=hyperparams['dataset_path'], map_name=scene.map_name)
+            for node in present_nodes:
+                nodes_positions.append(node.get(np.array([timestep + 1, timestep + max_ft]), {'position': ['x', 'y']}))
+                ego_positions.append(scene.ego_node.get(np.array([timestep - max_ht, timestep + max_ft]), {'position': ['x', 'y']}))
+                nodes_centreline_poses.append(get_node_centreline_poses(nodes_positions[-1], nusc_map))
 
-    return collate(batch), nodes, out_timesteps, target_positions, ego_positions
+        nodes_positions = np.stack(nodes_positions)
+        target_positions = nodes_positions[:, -1, :]
+        ego_positions = np.stack(ego_positions) # B * (7 + 1 + 12) * 2
+
+        if hyperparams['critical_obstacles']:
+            critical_mask = np.linalg.norm(nodes_positions - ego_positions[:, max_ht + 1:, :], axis=2).min(axis=1) <= 5.0
+            batch = [data for data, select in zip(batch, critical_mask) if select]
+            nodes = [node for node, select in zip(nodes, critical_mask) if select]
+            out_timesteps = [timestep for timestep, select in zip(out_timesteps, critical_mask) if select]
+            target_positions = target_positions[critical_mask]
+            ego_positions = ego_positions[critical_mask]
+            nodes_centreline_poses = [node_centreline_poses for node_centreline_poses, select in zip(nodes_centreline_poses, critical_mask) if select]
+
+        guidance_data = (target_positions, ego_positions, nodes_centreline_poses)
+
+    return collate(batch), nodes, out_timesteps, guidance_data
+
+def get_node_centreline_poses(node_positions, nusc_map):
+    arcline_token = nusc_map.get_closest_lane(node_positions[0, 0], node_positions[0, 1])
+    arcline_poses = np.array(arcline_path_utils.discretize_lane(nusc_map.get_arcline_path(arcline_token), resolution_meters=0.5))
+    last_index = np.linalg.norm(node_positions[0, :2]- arcline_poses[:, :2], axis=1).argmin()
+    node_centreline_poses = [arcline_poses[last_index]]
+    for i in range(len(node_positions) - 1):
+        next_arcline_token = nusc_map.get_closest_lane(node_positions[i, 0], node_positions[i, 1])
+        if (next_arcline_token != arcline_token):
+            arcline_poses = np.array(arcline_path_utils.discretize_lane(nusc_map.get_arcline_path(next_arcline_token), resolution_meters=0.5))
+            last_index = np.linalg.norm(node_positions[i, :2]- arcline_poses[:, :2], axis=1).argmin()
+            node_centreline_poses.append(arcline_poses[last_index])
+        next_index = np.linalg.norm(node_positions[i+1, :2]- arcline_poses[:, :2], axis=1).argmin()
+        for j in range(last_index+1, next_index+1):
+            node_centreline_poses.append(arcline_poses[j])
+    return node_centreline_poses

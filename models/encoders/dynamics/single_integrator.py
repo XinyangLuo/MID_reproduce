@@ -233,7 +233,7 @@ class SingleIntegrator(Dynamic):
         v_norm = torch.norm(v, dim=-1)
         acc = (v_norm[..., 1:] - v_norm[..., :-1])/self.dt
         jerk = (acc[..., 1:] - acc[..., :-1])/self.dt
-        return acc, jerk
+        return v_norm, acc, jerk
 
     def integrate_samples(self, v, x=None):
         """

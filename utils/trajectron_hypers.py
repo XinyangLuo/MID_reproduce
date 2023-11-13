@@ -73,8 +73,9 @@ def get_traj_hypers():
             }
         },
     'pred_state': {'PEDESTRIAN': {'velocity': ['x', 'y']}, 'VEHICLE': {'velocity': ['x', 'y']}},
-    'critical_obstacles': True,
     'guidance': True,
+    'critical_obstacles': True,
+    'dataset_path': '/home/yudie/dataset/nuscenes/full/',
     'log_histograms': False,
     'dynamic_edges': 'yes',
     'edge_state_combine_method': 'sum',

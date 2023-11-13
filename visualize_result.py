@@ -44,7 +44,8 @@ def visualize_timesteps_prediction(predictions_dict, ego_positions, dt, max_hl, 
       ax.set_title("timestep " + str(t))
     plt.show()
 
-def visualize_node_prediction(pred_positions, pred_velocities, pred_accelerations, pred_jerks, ego_positions, index=0, dt=0.5):
+def visualize_node_prediction(pred_positions, predicted_derivations, ego_positions, index=0, dt=0.5):
+    pred_velocities, pred_accelerations, pred_jerks = predicted_derivations
     node_cmap = ['#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
     fig = plt.figure("node " + str(index), figsize=(16, 10))
     fig_kinematic = plt.figure("node " + str(index) + " kinematic", figsize=(16, 10))
@@ -59,7 +60,7 @@ def visualize_node_prediction(pred_positions, pred_velocities, pred_acceleration
         ax.axis('equal')
 
         ax = fig_kinematic.add_subplot(4, 5, i + 1)
-        ax.plot(ts_velocities, np.linalg.norm(pred_velocities[i], axis=1), '-o', alpha = 0.6)
+        ax.plot(ts_velocities, pred_velocities[i], '-o', alpha = 0.6)
         ax.plot(ts_accelerations, pred_accelerations[i], '-o', alpha = 0.6)
         ax.plot(ts_jerks, pred_jerks[i], '-o', alpha = 0.6)
         ax.legend(['vel', 'acc', 'jerk'])

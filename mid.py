@@ -31,6 +31,8 @@ class MID():
         for epoch in range(1, self.config.epochs + 1):
             self.train_dataset.augment = self.config.augment
             for node_type, data_loader in self.train_data_loader.items():
+                if node_type == "PEDESTRIAN":
+                    continue
                 pbar = tqdm(data_loader, ncols=80)
                 for batch in pbar:
 
@@ -44,7 +46,7 @@ class MID():
             if epoch % self.config.eval_every == 0:
                 self.model.eval()
 
-                node_type = "PEDESTRIAN"
+                node_type = "VEHICLE"
                 eval_ade_batch_errors = []
                 eval_fde_batch_errors = []
 
@@ -67,7 +69,7 @@ class MID():
                         timesteps_o = batch[2]
                         traj_pred = self.model.generate(test_batch, node_type, num_points=12, sample=20,bestof=True) # B * 20 * 12 * 2
 
-                        predictions = traj_pred
+                        predictions = traj_pred[0]
                         predictions_dict = {}
                         for i, ts in enumerate(timesteps_o):
                             if ts not in predictions_dict.keys():
@@ -125,23 +127,26 @@ class MID():
         max_hl = self.hyperparams['maximum_history_length']
 
         for i, scene in enumerate([self.eval_scenes[19]]):
+        # for i, scene in enumerate(self.eval_scenes):
             print(f"----- Evaluating Scene {i + 1}/{len(self.eval_scenes)}")
             for t in tqdm(range(0, scene.timesteps, 10)):
                 timesteps = np.arange(t,t+8)
+                # timesteps = np.arange(t,t+10)
                 batch = get_timesteps_data(env=self.eval_env, scene=scene, t=timesteps, node_type=node_type, state=self.hyperparams['state'],
                                pred_state=self.hyperparams['pred_state'], edge_types=self.eval_env.get_edge_types(),
                                min_ht=7, max_ht=self.hyperparams['maximum_history_length'], min_ft=12,
                                max_ft=12, hyperparams=self.hyperparams)
                 if batch is None:
                     continue
-                (test_batch, nodes, timesteps_o, target_positions, ego_positions) = batch
+                (test_batch, nodes, timesteps_o, guidance_data) = batch
+
                 traj_pred = self.model.generate(test_batch, node_type, num_points=12, sample=20,bestof=True, sampling=sampling, step=step,
-                                                guidance=self.hyperparams['guidance'], target_positions=target_positions, ego_positions=ego_positions) # 20 * B * 12 * 2
-                (pred_positions, pred_velocities, pred_accelerations, pred_jerks) = traj_pred
+                                                guidance=self.hyperparams['guidance'], guidance_data=guidance_data) # 20 * B * 12 * 2
+                pred_positions, predicted_derivations = traj_pred
 
                 if self.hyperparams['guidance']:
                     for i in range(pred_positions.shape[1]):
-                        visualize_node_prediction(pred_positions[:, i], pred_velocities[:, i], pred_accelerations[:, i], pred_jerks[:, i], ego_positions[i, -12:, :], i)
+                        visualize_node_prediction(pred_positions[:, i], [x[:, i] for x in predicted_derivations], guidance_data[1][i, -12:, :], i)
 
                 predictions = pred_positions
                 predictions_dict = {}
@@ -149,7 +154,7 @@ class MID():
                 for i, ts in enumerate(timesteps_o):
                     if ts not in predictions_dict.keys():
                         predictions_dict[ts] = dict()
-                        ego_positions_dict[ts] = ego_positions[i]
+                        ego_positions_dict[ts] = guidance_data[1][i]
                     predictions_dict[ts][nodes[i]] = np.transpose(predictions[:, [i]], (1, 0, 2, 3))
                 
                 predictions_timesteps = list(predictions_dict.keys())
