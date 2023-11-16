@@ -5,7 +5,7 @@ from .dynamic import Dynamic
 # from utils import block_diag
 # from model.components import GMM2D
 from ..components import GMM2D
-
+import numpy as np
 
 class Unicycle(Dynamic):
     def init_constants(self):
@@ -63,7 +63,7 @@ class Unicycle(Dynamic):
                           v + a * self.dt], dim=0)
         return torch.where(~mask, d1, d2)
 
-    def integrate_samples(self, control_samples, x=None):
+    def integrate_samples(self, control_samples, x=None, get_phi=False):
         r"""
         TODO: Boris: Add docstring
         :param x:
@@ -81,11 +81,17 @@ class Unicycle(Dynamic):
         x = torch.stack([p_0[..., 0], p_0[..., 1], phi_0, torch.norm(v_0, dim=-1)], dim = 0).squeeze(dim=-1)
 
         mus_list = []
+        phi_list = []
         for t in range(ph):
             x = self.dynamic(x, u[..., t])
             mus_list.append(torch.stack((x[0], x[1]), dim=-1))
+            if get_phi:
+                phi_list.append(x[2])
 
         pos_mus = torch.stack(mus_list, dim=-2)
+        if get_phi:
+            phi_normalized = torch.fmod(torch.stack(phi_list, dim=-1) + np.pi, 2.0*np.pi) - np.pi
+            return pos_mus, phi_normalized
         return pos_mus
 
     def compute_control_jacobian(self, sample_batch_dim, components, x, u):

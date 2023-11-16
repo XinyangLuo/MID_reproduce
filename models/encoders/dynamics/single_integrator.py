@@ -235,7 +235,7 @@ class SingleIntegrator(Dynamic):
         jerk = (acc[..., 1:] - acc[..., :-1])/self.dt
         return v_norm, acc, jerk
 
-    def integrate_samples(self, v, x=None):
+    def integrate_samples(self, v, x=None, get_phi=False):
         """
         Integrates deterministic samples of velocity.
 
@@ -264,6 +264,8 @@ class SingleIntegrator(Dynamic):
         # return v
         #pdb.set_trace()
         #print(p_0)
+        if get_phi:
+            return torch.cumsum(v, dim=-2) * self.dt + p_0, torch.atan2(v[..., 1], v[..., 0])
         return torch.cumsum(v, dim=-2) * self.dt + p_0
 
     def integrate_distribution(self, v_dist, x=None):

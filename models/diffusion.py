@@ -84,6 +84,10 @@ class DiffusionTraj(Module):
 
     def sample(self, num_points, context, sample, bestof, point_dim=2, flexibility=0.0, ret_traj=False, sampling="ddpm", step=100,
                guidance=False, dynamics=None, guidance_data=None):
+        def get_theta_diff(theta0, theta1):
+            diff = abs(theta0 - theta1)
+            return min(diff, 2.0*np.pi - diff)
+        
         traj_list = []
         for i in range(sample):
             batch_size = context.size(0)
@@ -113,7 +117,7 @@ class DiffusionTraj(Module):
                         x_next = c0 * (x_t - c1 * e_theta) + sigma * z
                     else :
                         x_t.requires_grad_()
-                        pos = dynamics.integrate_samples(x_t)
+                        (pos, phi) = dynamics.integrate_samples(x_t, get_phi=True)
                         derivations = dynamics.derivate_samples(x_t)
 
                         (target_positions, ego_positions, nodes_centreline_poses) = guidance_data
@@ -121,13 +125,19 @@ class DiffusionTraj(Module):
                         ego_positions = torch.tensor(ego_positions[:, -num_points:, :]).to(context.device) # B * 12 * 2
                         nodes_centreline_poses = [torch.tensor(node_centreline_poses).to(context.device) for node_centreline_poses in nodes_centreline_poses]
 
+                        num_nodes = len(pos)
                         J_ego = -torch.norm(pos - ego_positions, dim=2).min(dim=1)[0].sum()
-                        J_target = -torch.norm(pos - target_positions, dim=2).min(dim=1)[0].sum()
-                        max_distance_centreline = torch.zeros(len(pos)).to(context.device)
-                        for node_index in range(len(pos)):
-                            distance = [torch.min(torch.norm(pos[node_index, j] - nodes_centreline_poses[node_index][:, :2], dim=1)) for j in range(num_points)]
-                            max_distance_centreline[node_index] = max(distance)
-                        J_centreline = -(max_distance_centreline - 5.0).clamp(min=0.0).sum()
+                        J_target = -torch.norm(pos - target_positions.unsqueeze(1), dim=2).min(dim=1)[0].sum()
+                        max_distance_centreline = torch.zeros(num_nodes).to(context.device)
+                        mean_theta_diff_centreline = torch.zeros(num_nodes).to(context.device)
+                        for node_index in range(num_nodes):
+                            point_to_pose_distances = [torch.norm(pos[node_index, j] - nodes_centreline_poses[node_index][:, :2], dim=1) for j in range(num_points)] # num_points * num_poses
+                            project_indices = [torch.argmin(distance) for distance in point_to_pose_distances] # num_points
+                            distances = [distance[project_index] for distance, project_index in zip(point_to_pose_distances, project_indices)] # num_points
+                            theta_diff = [get_theta_diff(phi[node_index, j], nodes_centreline_poses[node_index][project_indices[j], 2]) for j in range(num_points)]
+                            max_distance_centreline[node_index] = max(distances)
+                            mean_theta_diff_centreline[node_index] = sum(theta_diff)/len(theta_diff)
+                        J_centreline = -(max_distance_centreline - 5.0).clamp(min=0.0).sum() - (mean_theta_diff_centreline - np.pi/4).clamp(min=0.0).sum()*5.0
 
                         # SingleIntegrator
                         if len(derivations) == 3:
