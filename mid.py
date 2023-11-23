@@ -69,7 +69,9 @@ class MID():
                         test_batch = batch[0]
                         nodes = batch[1]
                         timesteps_o = batch[2]
-                        traj_pred = self.model.generate(test_batch, node_type, num_points=12, sample=20,bestof=True) # B * 20 * 12 * 2
+
+                        mean, std = self.train_env.get_standardize_params(self.hyperparams['pred_state'][node_type], node_type)
+                        traj_pred = self.model.generate(test_batch, node_type, num_points=12, sample=20,bestof=True,mean=mean,std=std) # B * 20 * 12 * 2
 
                         predictions = traj_pred[0]
                         predictions_dict = {}
@@ -138,8 +140,9 @@ class MID():
             if batch is None:
                 return
             (test_batch, nodes, timesteps_o, guidance_data) = batch
+            mean, std = self.eval_env.get_standardize_params(self.hyperparams['pred_state'][node_type], node_type)
             traj_pred = self.model.generate(test_batch, node_type, num_points=12, sample=20, bestof=True, sampling=sampling, step=step,
-                                            guidance=self.hyperparams['guidance'], guidance_data=guidance_data) # 20 * B * 12 * 2
+                                            guidance=self.hyperparams['guidance'], guidance_data=guidance_data, mean=mean, std=std) # 20 * B * 12 * 2
             predicted_positions, predicted_derivations = traj_pred
             (target_positions, ego_positions, nodes_centreline_poses) = guidance_data
             for i in range(len(nodes)):
@@ -168,7 +171,9 @@ class MID():
                 test_batch = batch[0]
                 nodes = batch[1]
                 timesteps_o = batch[2]
-                traj_pred = self.model.generate(test_batch, node_type, num_points=12, sample=20, bestof=True, sampling=sampling, step=step) # B * 20 * 12 * 2
+                
+                mean, std = self.eval_env.get_standardize_params(self.hyperparams['pred_state'][node_type], node_type)
+                traj_pred = self.model.generate(test_batch, node_type, num_points=12, sample=20, bestof=True, sampling=sampling, step=step, mean=mean, std=std) # B * 20 * 12 * 2
 
                 predictions = traj_pred[0]
                 predictions_dict = {}

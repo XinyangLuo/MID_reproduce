@@ -82,8 +82,15 @@ class DiffusionTraj(Module):
         loss = F.mse_loss(e_theta.view(-1, point_dim), e_rand.view(-1, point_dim), reduction='mean')
         return loss
 
+    def unstandardize(self, x, mean=None, std=None):
+        if std is not None:
+            x = x * torch.tensor(std).cuda()
+        if mean is not None:
+            x = x + torch.tensor(mean).cuda()
+        return x
+
     def sample(self, num_points, context, sample, bestof, point_dim=2, flexibility=0.0, ret_traj=False, sampling="ddpm", step=100,
-               guidance=False, dynamics=None, guidance_data=None):
+               guidance=False, dynamics=None, guidance_data=None, mean=None, std=None):
         def get_theta_diff(theta0, theta1):
             diff = abs(theta0 - theta1)
             return min(diff, 2.0*np.pi - diff)
@@ -117,8 +124,9 @@ class DiffusionTraj(Module):
                         x_next = c0 * (x_t - c1 * e_theta) + sigma * z
                     else :
                         x_t.requires_grad_()
-                        (pos, phi) = dynamics.integrate_samples(x_t, get_phi=True)
-                        derivations = dynamics.derivate_samples(x_t)
+                        x_t_unst = self.unstandardize(x_t, mean, std)
+                        (pos, phi) = dynamics.integrate_samples(x_t_unst, get_phi=True)
+                        derivations = dynamics.derivate_samples(x_t_unst)
 
                         (target_positions, ego_positions, nodes_centreline_poses) = guidance_data
                         target_positions = torch.tensor(target_positions).to(context.device)
@@ -170,7 +178,7 @@ class DiffusionTraj(Module):
                 traj_list.append(traj)
             else:
                 traj_list.append(traj[0])
-        return torch.stack(traj_list)
+        return self.unstandardize(torch.stack(traj_list), mean, std)
 
 class TrajNet(Module):
 

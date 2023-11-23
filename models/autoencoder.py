@@ -29,7 +29,7 @@ class AutoEncoder(Module):
         z = self.encoder.get_latent(batch, node_type)
         return z
     
-    def generate(self, batch, node_type, num_points, sample, bestof,flexibility=0.0, ret_traj=False, sampling="ddpm", step=100, guidance=False, guidance_data=None):
+    def generate(self, batch, node_type, num_points, sample, bestof,flexibility=0.0, ret_traj=False, sampling="ddpm", step=100, guidance=False, guidance_data=None, mean=None, std=None):
         #print(f"Using {sampling}")
         dynamics = self.encoder.node_models_dict[node_type].dynamic
         encoded_x = self.encoder.get_latent(batch, node_type)
@@ -48,5 +48,5 @@ class AutoEncoder(Module):
          map) = batch
 
         feat_x_encoded = self.encode(batch,node_type) # B * 64
-        loss = self.diffusion.get_loss(y_t.cuda(), feat_x_encoded)
+        loss = self.diffusion.get_loss(y_st_t.cuda(), feat_x_encoded)
         return loss
