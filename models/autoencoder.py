@@ -37,7 +37,7 @@ class AutoEncoder(Module):
                                                  guidance=guidance, dynamics=dynamics, guidance_data=guidance_data)
         predicted_y_pos = dynamics.integrate_samples(predicted_y_vel)
         predicted_y_derivations = dynamics.derivate_samples(predicted_y_vel)
-        return predicted_y_pos.cpu().detach().numpy(), [x.cpu().detach().numpy() for x in predicted_y_derivations]
+        return predicted_y_pos.cpu().detach().numpy(), [x.cpu().detach().numpy() for x in predicted_y_derivations], predicted_y_vel
 
     def get_loss(self, batch, node_type):
         (first_history_index,

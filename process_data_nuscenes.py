@@ -146,7 +146,7 @@ def augment(scene):
 
 def process_scene(ns_scene, env, nusc):
     scene_id = int(ns_scene['name'].replace('scene-', ''))
-    data = pd.DataFrame(columns=['frame_id', 'type', 'node_id', 'x', 'y', 'z', 'heading'])
+    data = pd.DataFrame(columns=['frame_id', 'type', 'node_id', 'x', 'y', 'z', 'heading', 'width', 'length', 'height'])
     ego_x, ego_y, ego_heading = [], [], []
     sample_token = ns_scene['first_sample_token']
     sample = nusc.get('sample', sample_token)
@@ -174,15 +174,23 @@ def process_scene(ns_scene, env, nusc):
                                              'x': annotation['translation'][0],
                                              'y': annotation['translation'][1],
                                              'z': annotation['translation'][2],
-                                             'heading': Quaternion(annotation['rotation']).yaw_pitch_roll[0]})
+                                             'heading': Quaternion(annotation['rotation']).yaw_pitch_roll[0],
+                                             'width': annotation['size'][0],
+                                             'length': annotation['size'][1],
+                                             'height': annotation['size'][2]})
 
-        # Ego Vehicle (delete)
+        # Ego Vehicle (omit)
 
         sample_data = nusc.get('sample_data', sample['data']['CAM_FRONT'])
         annotation = nusc.get('ego_pose', sample_data['ego_pose_token'])
         ego_x.append(annotation['translation'][0])
         ego_y.append(annotation['translation'][1])
         ego_heading.append(Quaternion(annotation['rotation']).yaw_pitch_roll[0])
+
+        # data from https://forum.nuscenes.org/t/dimensions-of-the-ego-vehicle-used-to-gather-data/550
+        ego_width = 1.73
+        ego_length = 4.08
+        ego_height = 1.56
 
         sample = nusc.get('sample', sample['next'])
         frame_id += 1
@@ -197,10 +205,11 @@ def process_scene(ns_scene, env, nusc):
     # data['y'] = data['y'] - data['y'].mean()
 
     scene = Scene(timesteps=max_timesteps + 1, dt=dt, name=str(scene_id), aug_func=augment)
-    scene.ego_node = Node(node_type=env.NodeType.VEHICLE, node_id='ego', data=process_vehicle_data(np.array(ego_x), np.array(ego_y), np.array(ego_heading), scene.dt))
+    scene.ego_node = Node(node_type=env.NodeType.VEHICLE, node_id='ego', 
+                          data=process_vehicle_data(np.array(ego_x), np.array(ego_y), np.array(ego_heading), scene.dt),
+                          length=ego_length, width=ego_width, height=ego_height)
 
-    # Generate Maps (delete)
-    scene.map_name = nusc.get('log', ns_scene['log_token'])['location']
+    # Generate Maps (omit)
 
     for node_id in pd.unique(data['node_id']):
         node_df = data[data['node_id'] == node_id]
@@ -216,15 +225,18 @@ def process_scene(ns_scene, env, nusc):
         x = node_values[:, 0].astype(float)
         y = node_values[:, 1].astype(float)
         heading = node_df['heading'].values.astype(float)
+        width = node_df['width'].mean()
+        length = node_df['length'].mean()
+        height = node_df['height'].mean()
 
-        # Kalman filter (delete)
+        # Kalman filter (omit)
 
         if node_df.iloc[0]['type'] == env.NodeType.VEHICLE:
             node_data = process_vehicle_data(x, y, heading, scene.dt)
         else:
             node_data = process_pedestrian_data(x, y, scene.dt)
         
-        node = Node(node_type=node_df.iloc[0]['type'], node_id=node_id, data=node_data)
+        node = Node(node_type=node_df.iloc[0]['type'], node_id=node_id, data=node_data, length=length, width=width, height=height)
         node.first_timestep = node_df['frame_id'].iloc[0]
         scene.nodes.append(node)
     return scene

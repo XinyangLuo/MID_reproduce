@@ -28,6 +28,7 @@ specify_eval_scene: False
 eval_scene_index: 19
 eval_timestep: 7
 visualize_with_map: False
+naturalistic_metric: False
 ############### Trajectron++ Config #################
 # misc
 conf: None

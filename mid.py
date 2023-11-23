@@ -22,6 +22,7 @@ import evaluation.visualization as vis
 import matplotlib.pyplot as plt
 from nuscenes.map_expansion.map_api import NuScenesMap
 import evaluation
+from naturalistic_metric import NaturalisticMetric
 
 class MID():
     def __init__(self, config):
@@ -174,6 +175,12 @@ class MID():
                 
                 mean, std = self.eval_env.get_standardize_params(self.hyperparams['pred_state'][node_type], node_type)
                 traj_pred = self.model.generate(test_batch, node_type, num_points=12, sample=20, bestof=True, sampling=sampling, step=step, mean=mean, std=std) # B * 20 * 12 * 2
+                if self.config.naturalistic_metric:
+                    nm = NaturalisticMetric(traj_pred[0], traj_pred[2], nodes)
+                    nm.DistanceDistribution()
+                    nm.SpeedDistribution()
+                    nm.CollisionDistribution()
+                    nm.turn_rate_violation_distribution()
 
                 predictions = traj_pred[0]
                 predictions_dict = {}
